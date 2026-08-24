@@ -229,10 +229,11 @@
         const rows = (data.results || []).map(r => `<tr><td>第 ${r.row || ""} 行</td><td>${r.status || ""}</td><td>${r.reason || ""}</td></tr>`).join("");
         const statusText = data.status === "done" ? "完成" : data.status === "error" ? "出错" : "截图中";
         const stopped = data.stopped ? `<div class="bad">已中止：${data.reason || ""}</div>` : "";
+        const errorReason = data.status === "error" && data.reason ? `<div class="bad">错误原因：${escapeHtml(data.reason)}</div>` : "";
         const download = data.workbook ? `<a class="download" href="${data.workbook}">下载写回图片的 Excel</a>` : "";
         el.innerHTML = `<span class="${data.status === "error" ? "bad" : "ok"}">${statusText}：${data.done}/${data.total || "?"}，成功 ${data.success}，失败 ${data.failed}</span>
           <div class="progress"><div class="bar" style="width:${percent}%"></div></div>
-          ${stopped}${download}
+          ${stopped}${errorReason}${download}
           ${rows ? `<table class="mini-table">${rows}</table>` : ""}`;
       };
       const tick = async () => {
@@ -255,6 +256,16 @@
       button.disabled = true;
       await tick();
       timer = setInterval(tick, 1000);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
     }
 
     async function loadTodayLogs() {

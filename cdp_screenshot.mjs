@@ -98,6 +98,7 @@ class Cdp {
 async function launchChrome(port, viewport) {
   const chromePath = await resolveChrome();
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), "xhs-shot-"));
+  const headless = process.env.HEADLESS !== "false";
   const args = [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profile}`,
@@ -110,6 +111,7 @@ async function launchChrome(port, viewport) {
     `--window-size=${viewport.width},${viewport.height}`,
     "about:blank",
   ];
+  if (headless) args.unshift("--headless=new");
   const child = spawn(chromePath, args, { stdio: "ignore" });
   for (let i = 0; i < 80; i++) {
     try {

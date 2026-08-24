@@ -148,7 +148,15 @@ def run_worker(items: list[dict[str, Any]], opts: BatchOptions) -> Path:
         },
     }
     job_path.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
-    subprocess.run([resolve_node(), str(WORKER), "--job", str(job_path), "--out", str(result_path)], check=True)
+    completed = subprocess.run(
+        [resolve_node(), str(WORKER), "--job", str(job_path), "--out", str(result_path)],
+        text=True,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        error_text = "\n".join(part for part in [completed.stderr.strip(), completed.stdout.strip()] if part)
+        (opts.run_dir / "worker_error.txt").write_text(error_text or f"worker exited {completed.returncode}", encoding="utf-8")
+        raise RuntimeError(error_text or f"截图浏览器启动失败，退出码 {completed.returncode}")
     return result_path
 
 
@@ -226,7 +234,15 @@ def process_single(url: str, run_dir: Path, timeout_ms: int = 25000) -> dict[str
         "viewport": {"width": opts.viewport_width, "height": opts.viewport_height, "deviceScaleFactor": 1},
     }
     job_path.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
-    subprocess.run([resolve_node(), str(WORKER), "--job", str(job_path), "--out", str(result_path)], check=True)
+    completed = subprocess.run(
+        [resolve_node(), str(WORKER), "--job", str(job_path), "--out", str(result_path)],
+        text=True,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        error_text = "\n".join(part for part in [completed.stderr.strip(), completed.stdout.strip()] if part)
+        (run_dir / "worker_error.txt").write_text(error_text or f"worker exited {completed.returncode}", encoding="utf-8")
+        raise RuntimeError(error_text or f"截图浏览器启动失败，退出码 {completed.returncode}")
     data = json.loads(result_path.read_text(encoding="utf-8"))
     for result in data.get("results", []):
         image_path = Path(result.get("screenshot") or result.get("failureScreenshot") or "")

@@ -308,6 +308,12 @@ class Handler(BaseHTTPRequestHandler):
                 total = len(json.loads(job_path.read_text(encoding="utf-8")).get("items", []))
             except Exception:
                 total = 0
+        error_path = run_dir / "worker_error.txt"
+        if error_path.exists() and not reason:
+            try:
+                reason = error_path.read_text(encoding="utf-8").strip()[:1200]
+            except Exception:
+                pass
         if job.get("result"):
             results = job["result"].get("results", results)
             stopped = bool(job["result"].get("stopped", stopped))
