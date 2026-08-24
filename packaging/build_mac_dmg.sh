@@ -24,7 +24,7 @@ cd "$PROJECT_DIR"
   --add-data sample_links.xlsx:. \
   --add-data assets/app_icon.icns:. \
   --add-binary "$NODE_BIN":node \
-  app.py
+  native_app.py
 
 STAGE_DIR="$(mktemp -d /private/tmp/xhs-dmg.XXXXXX)"
 cp -R "dist/小红书笔记截图工具.app" "$STAGE_DIR/"
