@@ -83,6 +83,20 @@ function defaultChromeUserDataDir() {
   return path.join(os.homedir(), ".config/google-chrome");
 }
 
+async function waitForChrome(port, child, useSystemProfile) {
+  for (let i = 0; i < 80; i++) {
+    try {
+      await httpJson(`http://127.0.0.1:${port}/json/version`);
+      return;
+    } catch {
+      await sleep(250);
+    }
+  }
+  child.kill();
+  if (useSystemProfile) throw new Error("direct-system-profile-failed");
+  throw new Error("Chrome did not start. Please check Google Chrome is installed.");
+}
+
 class Cdp {
   constructor(wsUrl) {
     this.wsUrl = wsUrl;
@@ -129,12 +143,14 @@ class Cdp {
 async function launchChrome(port, viewport, job = {}) {
   const chromePath = await resolveChrome();
   const useSystemProfile = job.useSystemChromeProfile !== false;
-  let profile = useSystemProfile ? defaultChromeUserDataDir() : await fs.mkdtemp(path.join(os.tmpdir(), "xhs-shot-"));
+  const systemProfile = defaultChromeUserDataDir();
+  let profile = useSystemProfile ? systemProfile : await fs.mkdtemp(path.join(os.tmpdir(), "xhs-shot-"));
+  let profileDirectory = "Default";
   const headless = process.env.HEADLESS !== "false";
-  const args = [
+  const buildArgs = () => [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profile}`,
-    "--profile-directory=Default",
+    `--profile-directory=${profileDirectory}`,
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-session-crashed-bubble",
@@ -144,21 +160,27 @@ async function launchChrome(port, viewport, job = {}) {
     `--window-size=${viewport.width},${viewport.height}`,
     "about:blank",
   ];
+  let args = buildArgs();
   if (headless && !useSystemProfile) args.unshift("--headless=new");
-  const child = spawn(chromePath, args, { stdio: "ignore" });
-  for (let i = 0; i < 80; i++) {
+  let child = spawn(chromePath, args, { stdio: "ignore" });
+  try {
+    await waitForChrome(port, child, useSystemProfile);
+    return { child, profile };
+  } catch (err) {
+    if (!useSystemProfile || err.message !== "direct-system-profile-failed") throw err;
+    await writeStatus(job, { stage: "chrome", message: "本机 Chrome 正在运行，已自动切换到临时环境；如需真正复用本机状态，请完全退出 Chrome 后重试" });
+    profile = await fs.mkdtemp(path.join(os.tmpdir(), "xhs-shot-"));
+    profileDirectory = "Default";
+    const fallbackPort = port + 1001;
+    args = buildArgs().map((arg) => arg.startsWith("--remote-debugging-port=") ? `--remote-debugging-port=${fallbackPort}` : arg);
+    child = spawn(chromePath, args, { stdio: "ignore" });
     try {
-      await httpJson(`http://127.0.0.1:${port}/json/version`);
-      return { child, profile };
-    } catch {
-      await sleep(250);
+      await waitForChrome(fallbackPort, child, false);
+      return { child, profile, port: fallbackPort };
+    } catch (fallbackErr) {
+      throw new Error(`启动 Chrome 截图环境失败：${fallbackErr.message}`);
     }
   }
-  child.kill();
-  if (useSystemProfile) {
-    throw new Error("复用本机 Chrome 环境失败。请先完全退出 Chrome 后重试；或取消勾选“复用本机 Chrome 环境”改用临时环境。");
-  }
-  throw new Error("Chrome did not start. Please check Google Chrome is installed.");
 }
 
 async function newPage(port) {
@@ -345,9 +367,10 @@ async function main() {
   if (!jobPath || !outPath) throw new Error("Missing --job or --out");
   const job = JSON.parse(await fs.readFile(jobPath, "utf8"));
   await fs.mkdir(job.outputDir, { recursive: true });
-  const port = 9222 + Math.floor(Math.random() * 1000);
+  let port = 9222 + Math.floor(Math.random() * 1000);
   await writeStatus(job, { stage: "chrome", message: "正在启动 Chrome 截图环境" });
   const chrome = await launchChrome(port, job.viewport, job);
+  port = chrome.port || port;
   const results = [];
   let delay = job.delayMs || 3500;
   let consecutive = 0;
