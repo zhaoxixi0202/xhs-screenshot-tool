@@ -5,7 +5,6 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 NODE_BIN="${NODE_BIN:-$(command -v node || true)}"
 DMG_PATH="${DMG_PATH:-$PROJECT_DIR/../小红书笔记截图工具_Mac可分发安装包.dmg}"
-AUTH_API_URL="${AUTH_API_URL:-}"
 TARGET_ARCH="${TARGET_ARCH:-$(uname -m)}"
 
 if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
@@ -14,9 +13,6 @@ if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
 fi
 
 cd "$PROJECT_DIR"
-
-AUTH_CONFIG_DIR="$(mktemp -d /private/tmp/xhs-auth-config.XXXXXX)"
-printf '{"authApiUrl":"%s"}\n' "$AUTH_API_URL" > "$AUTH_CONFIG_DIR/auth_config.json"
 
 "$PYTHON_BIN" -m PyInstaller \
   --clean \
@@ -30,7 +26,6 @@ printf '{"authApiUrl":"%s"}\n' "$AUTH_API_URL" > "$AUTH_CONFIG_DIR/auth_config.j
   --add-data cdp_screenshot.mjs:. \
   --add-data sample_links.xlsx:. \
   --add-data assets/app_icon.icns:. \
-  --add-data "$AUTH_CONFIG_DIR/auth_config.json":. \
   --add-binary "$NODE_BIN":node \
   native_app.py
 

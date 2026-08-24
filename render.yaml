@@ -9,19 +9,3 @@ services:
       name: xhs-runs
       mountPath: /app/runs
       sizeGB: 5
-  - type: web
-    name: xhs-screenshot-auth
-    env: docker
-    dockerfilePath: ./Dockerfile.auth
-    plan: starter
-    autoDeploy: false
-    healthCheckPath: /health
-    envVars:
-      - key: ADMIN_TOKEN
-        generateValue: true
-      - key: AUTH_DATA_DIR
-        value: /app/auth_data
-    disk:
-      name: xhs-auth-data
-      mountPath: /app/auth_data
-      sizeGB: 1
