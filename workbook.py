@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,22 @@ def resolve_node(env: dict | None = None) -> str:
     env = env or os.environ
     if env.get("NODE_PATH"):
         return env["NODE_PATH"]
+    node_name = "node.exe" if os.name == "nt" else "node"
+    bundle_root = Path(getattr(sys, "_MEIPASS", ROOT))
+    bundle_roots = [bundle_root]
+    if getattr(sys, "frozen", False):
+        exe_path = Path(sys.executable).resolve()
+        bundle_roots.extend(
+            [
+                exe_path.parents[1] / "Resources",
+                exe_path.parents[1] / "Frameworks",
+                exe_path.parents[1] / "Frameworks" / "_internal",
+            ]
+        )
+    for root in bundle_roots:
+        for bundled in (root / "node" / node_name, root / "node"):
+            if bundled.exists() and bundled.is_file():
+                return str(bundled)
     if LOCAL_NODE.exists():
         return str(LOCAL_NODE)
     found = shutil.which("node")

@@ -5,10 +5,12 @@ import cgi
 import json
 import mimetypes
 import os
+import sys
 import threading
 import time
 import traceback
 import uuid
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
@@ -342,6 +344,9 @@ def main() -> None:
     host, port = server_address()
     server = ThreadingHTTPServer((host, port), Handler)
     print(f"小红书笔记截图工具已启动：http://{host}:{port}")
+    should_open = os.environ.get("OPEN_BROWSER", "").lower() in {"1", "true", "yes"} or getattr(sys, "frozen", False)
+    if should_open:
+        threading.Timer(0.8, lambda: webbrowser.open(f"http://127.0.0.1:{port}/")).start()
     server.serve_forever()
 
 
