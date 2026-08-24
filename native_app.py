@@ -273,6 +273,12 @@ class ScreenshotApp:
         self.progress_bar = ttk.Progressbar(inner, mode="determinate", maximum=100)
         self.progress_bar.pack(fill="x", pady=(10, 6))
         ttk.Label(inner, textvariable=self.progress).pack(anchor="w")
+        self.recent_failures = ttk.Treeview(inner, columns=("row", "reason"), show="headings", height=3)
+        self.recent_failures.heading("row", text="行")
+        self.recent_failures.heading("reason", text="最近失败原因")
+        self.recent_failures.column("row", width=60, stretch=False)
+        self.recent_failures.column("reason", width=720)
+        self.recent_failures.pack(fill="x", pady=(8, 0))
 
         log_box = ttk.LabelFrame(outer, text="当天截图日志")
         log_box.pack(fill="both", expand=True)
@@ -440,6 +446,7 @@ class ScreenshotApp:
                 live_message = ""
         success = sum(1 for item in results if item.get("status") == "成功")
         failed = len(results) - success
+        self.render_recent_failures(results)
         percent = round(len(results) / total * 100) if total else 0
         self.progress_bar["value"] = percent
         stop_text = f"；已中止：{reason}" if stopped else ""
@@ -448,10 +455,21 @@ class ScreenshotApp:
             prefix = (prefix or "第一行仍在等待页面加载/浏览器响应；")
         self.progress.set(f"{prefix}{len(results)}/{total or '?'}，成功 {success}，失败 {failed}{stop_text}")
 
+    def render_recent_failures(self, results: list[dict]) -> None:
+        if not hasattr(self, "recent_failures"):
+            return
+        for item_id in self.recent_failures.get_children():
+            self.recent_failures.delete(item_id)
+        failures = [item for item in results if item.get("status") and item.get("status") != "成功"][-3:]
+        for item in failures:
+            reason = str(item.get("reason", ""))[:180]
+            self.recent_failures.insert("", "end", values=(item.get("row", ""), reason))
+
     def update_progress_from_result(self, result: dict) -> None:
         results = result.get("results", [])
         success = sum(1 for item in results if item.get("status") == "成功")
         failed = len(results) - success
+        self.render_recent_failures(results)
         total = len(results)
         self.progress_bar["value"] = 100 if total else 0
         self.progress.set(f"{total}/{total}，成功 {success}，失败 {failed}")

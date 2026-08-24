@@ -222,7 +222,7 @@ const STATUS_SCRIPT = String.raw`(() => {
       r.width > innerWidth * 0.3 && r.height > innerHeight * 0.25;
     return covers && /(手机登录|验证码|手机号|扫码登录|登录后推荐更懂你的笔记|立即登录)/.test(t);
   });
-  const blocked = /(安全验证|验证码|访问异常|操作频繁|请求频繁|滑块|登录后查看|请登录|当前环境存在异常)/.test(text) && !loginDialog;
+  const blocked = /(安全验证|验证码|访问异常|操作频繁|请求频繁|滑块|登录后查看|请登录|当前环境存在异常|IP at risk|secure network|300012)/i.test(text) && !loginDialog;
   const loading = /(加载中|正在加载|loading)/i.test(text);
   const noteCandidates = Array.from(document.querySelectorAll([
     '[class*="note-detail"]',
