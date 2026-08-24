@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue
 import subprocess
@@ -31,6 +32,15 @@ def app_data_dir() -> Path:
     path = base / "xhs-screenshot-tool"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def setup_logging() -> None:
+    log_path = app_data_dir() / "app.log"
+    logging.basicConfig(
+        filename=log_path,
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
 
 
 def new_native_run_dir() -> Path:
@@ -69,6 +79,7 @@ class ScreenshotApp:
         self.root.title(APP_NAME)
         self.root.geometry("880x680")
         self.root.minsize(760, 560)
+        self.root.after(300, self.bring_to_front)
         self.selected_file: Path | None = None
         self.current_run_dir: Path | None = None
         self.worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
@@ -91,6 +102,12 @@ class ScreenshotApp:
 
         self.build_ui()
         self.root.after(500, self.refresh_today_logs)
+
+    def bring_to_front(self) -> None:
+        self.root.lift()
+        self.root.focus_force()
+        self.root.attributes("-topmost", True)
+        self.root.after(700, lambda: self.root.attributes("-topmost", False))
 
     def build_ui(self) -> None:
         outer = ttk.Frame(self.root, padding=18)
@@ -372,7 +389,13 @@ class ScreenshotApp:
 
 
 def main() -> None:
-    ScreenshotApp().run()
+    setup_logging()
+    logging.info("starting native app")
+    try:
+        ScreenshotApp().run()
+    except Exception:
+        logging.exception("native app crashed")
+        raise
 
 
 if __name__ == "__main__":

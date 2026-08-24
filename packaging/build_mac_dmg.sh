@@ -18,6 +18,7 @@ cd "$PROJECT_DIR"
   --noconfirm \
   --windowed \
   --name "小红书笔记截图工具" \
+  --osx-bundle-identifier "local.xhs-screenshot-tool" \
   --icon assets/app_icon.icns \
   --add-data static:static \
   --add-data cdp_screenshot.mjs:. \
