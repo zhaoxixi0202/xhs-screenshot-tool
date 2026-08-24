@@ -16,7 +16,7 @@ from tkinter import BooleanVar, Menu, StringVar, Tk, Toplevel, filedialog, messa
 from openpyxl import load_workbook
 
 from app import workbook_info_payload
-from auth_store import AuthStore
+from remote_auth import RemoteAuthClient
 from workbook import BatchOptions, process_batch
 
 
@@ -56,10 +56,6 @@ def request_cancel(run_dir: Path) -> Path:
     return cancel_path
 
 
-def account_store() -> AuthStore:
-    return AuthStore(app_data_dir() / "accounts.json")
-
-
 def int_value(values: dict, key: str, default: int) -> int:
     raw = str(values.get(key) or "").strip()
     return int(raw) if raw else default
@@ -87,7 +83,7 @@ def make_batch_options(workbook_path: Path, run_dir: Path, values: dict) -> Batc
 
 class ScreenshotApp:
     def __init__(self) -> None:
-        self.auth = account_store()
+        self.auth = RemoteAuthClient()
         self.current_user: dict | None = None
         self.root = Tk()
         self.root.title(APP_NAME)
@@ -127,12 +123,9 @@ class ScreenshotApp:
         self.root.after(700, lambda: self.root.attributes("-topmost", False))
 
     def show_login(self) -> None:
-        if not self.auth.has_accounts():
-            self.show_first_admin_setup()
-            return
         win = Toplevel(self.root)
         win.title("登录")
-        win.geometry("380x280")
+        win.geometry("400x300")
         win.resizable(False, False)
         win.protocol("WM_DELETE_WINDOW", self.root.destroy)
         win.grab_set()
@@ -140,6 +133,8 @@ class ScreenshotApp:
         frame = ttk.Frame(win, padding=22)
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text="登录小红书笔记截图工具", font=("", 16, "bold")).pack(anchor="w", pady=(0, 12))
+        if not self.auth.configured():
+            ttk.Label(frame, text="未配置账号服务器地址，请联系管理员。", foreground="#b42318").pack(anchor="w", pady=(0, 10))
         username = StringVar()
         password = StringVar()
         ttk.Label(frame, text="账号").pack(anchor="w")
@@ -149,7 +144,11 @@ class ScreenshotApp:
         password_entry.pack(fill="x", pady=(3, 14))
 
         def submit() -> None:
-            user = self.auth.verify_login(username.get(), password.get())
+            try:
+                user = self.auth.verify_login(username.get(), password.get())
+            except Exception as exc:
+                messagebox.showerror(APP_NAME, str(exc))
+                return
             if not user:
                 messagebox.showerror(APP_NAME, "账号或密码错误，或账号已被禁用。")
                 return
@@ -161,44 +160,6 @@ class ScreenshotApp:
         win.bind("<Return>", lambda _event: submit())
         username.set("admin")
         password_entry.focus_force()
-        self.center_window(win)
-
-    def show_first_admin_setup(self) -> None:
-        win = Toplevel(self.root)
-        win.title("首次创建管理员")
-        win.geometry("430x380")
-        win.resizable(False, False)
-        win.protocol("WM_DELETE_WINDOW", self.root.destroy)
-        win.grab_set()
-
-        frame = ttk.Frame(win, padding=22)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="首次使用：创建管理员账号", font=("", 16, "bold")).pack(anchor="w", pady=(0, 8))
-        ttk.Label(frame, text="这个管理员用于管理本软件的登录账号。", foreground="#667085").pack(anchor="w", pady=(0, 12))
-        username = StringVar(value="admin")
-        password = StringVar()
-        confirm = StringVar()
-        ttk.Label(frame, text="管理员账号").pack(anchor="w")
-        ttk.Entry(frame, textvariable=username).pack(fill="x", pady=(3, 8))
-        ttk.Label(frame, text="密码（至少 6 位）").pack(anchor="w")
-        ttk.Entry(frame, textvariable=password, show="•").pack(fill="x", pady=(3, 8))
-        ttk.Label(frame, text="确认密码").pack(anchor="w")
-        ttk.Entry(frame, textvariable=confirm, show="•").pack(fill="x", pady=(3, 12))
-
-        def submit() -> None:
-            if password.get() != confirm.get():
-                messagebox.showerror(APP_NAME, "两次密码不一致。")
-                return
-            try:
-                self.current_user = self.auth.create_first_admin(username.get(), password.get())
-            except Exception as exc:
-                messagebox.showerror(APP_NAME, str(exc))
-                return
-            win.destroy()
-            self.open_main_window()
-
-        ttk.Button(frame, text="创建并进入", command=submit).pack(fill="x")
-        win.bind("<Return>", lambda _event: submit())
         self.center_window(win)
 
     def open_main_window(self) -> None:
@@ -221,8 +182,6 @@ class ScreenshotApp:
     def build_menu(self) -> None:
         menu = Menu(self.root)
         account_menu = Menu(menu, tearoff=False)
-        if self.current_user and self.current_user.get("role") == "admin":
-            account_menu.add_command(label="账号管理中心", command=self.open_account_center)
         account_menu.add_command(label="退出登录", command=self.logout)
         menu.add_cascade(label="账号", menu=account_menu)
         self.root.config(menu=menu)
@@ -249,7 +208,7 @@ class ScreenshotApp:
             foreground="#667085",
         )
         note.pack(anchor="w", pady=(4, 14))
-        user_text = f"当前账号：{self.current_user.get('username', '') if self.current_user else ''}（账号管理在顶部菜单「账号」里）"
+        user_text = f"当前账号：{self.current_user.get('username', '') if self.current_user else ''}"
         ttk.Label(outer, text=user_text, foreground="#667085").pack(anchor="w", pady=(0, 12))
 
         file_box = ttk.LabelFrame(outer, text="Excel 文件")
@@ -572,99 +531,6 @@ class ScreenshotApp:
                 subprocess.run(["xdg-open", str(target)], check=False)
         except Exception as exc:
             messagebox.showerror(APP_NAME, f"无法打开结果位置：{exc}")
-
-    def open_account_center(self) -> None:
-        if not self.current_user or self.current_user.get("role") != "admin":
-            messagebox.showwarning(APP_NAME, "只有管理员可以管理账号。")
-            return
-        win = Toplevel(self.root)
-        win.title("账号管理中心")
-        win.geometry("680x420")
-        frame = ttk.Frame(win, padding=14)
-        frame.pack(fill="both", expand=True)
-
-        tree = ttk.Treeview(frame, columns=("username", "role", "active", "updated"), show="headings", height=10)
-        tree.heading("username", text="账号")
-        tree.heading("role", text="角色")
-        tree.heading("active", text="状态")
-        tree.heading("updated", text="更新时间")
-        tree.column("username", width=170)
-        tree.column("role", width=90)
-        tree.column("active", width=90)
-        tree.column("updated", width=180)
-        tree.pack(fill="both", expand=True)
-
-        def refresh() -> None:
-            for item in tree.get_children():
-                tree.delete(item)
-            for account in self.auth.list_accounts():
-                active_text = "启用" if account["active"] else "禁用"
-                tree.insert("", "end", iid=account["username"], values=(account["username"], account["role"], active_text, account["updatedAt"]))
-
-        def selected_username() -> str | None:
-            selected = tree.selection()
-            return selected[0] if selected else None
-
-        def add_or_reset() -> None:
-            self.open_account_editor(refresh)
-
-        def disable_selected() -> None:
-            username = selected_username()
-            if not username:
-                messagebox.showwarning(APP_NAME, "请先选择账号。")
-                return
-            if username == self.current_user.get("username"):
-                messagebox.showwarning(APP_NAME, "不能禁用当前登录账号。")
-                return
-            self.auth.set_active(username, False)
-            refresh()
-
-        def enable_selected() -> None:
-            username = selected_username()
-            if not username:
-                messagebox.showwarning(APP_NAME, "请先选择账号。")
-                return
-            self.auth.set_active(username, True)
-            refresh()
-
-        buttons = ttk.Frame(frame)
-        buttons.pack(fill="x", pady=(10, 0))
-        ttk.Button(buttons, text="新增/重置账号", command=add_or_reset).pack(side="left")
-        ttk.Button(buttons, text="启用", command=enable_selected).pack(side="left", padx=(8, 0))
-        ttk.Button(buttons, text="禁用", command=disable_selected).pack(side="left", padx=(8, 0))
-        ttk.Button(buttons, text="关闭", command=win.destroy).pack(side="right")
-        refresh()
-        self.center_window(win)
-
-    def open_account_editor(self, on_saved) -> None:
-        win = Toplevel(self.root)
-        win.title("新增/重置账号")
-        win.geometry("390x360")
-        frame = ttk.Frame(win, padding=18)
-        frame.pack(fill="both", expand=True)
-        username = StringVar()
-        password = StringVar()
-        role = StringVar(value="user")
-        active = BooleanVar(value=True)
-        ttk.Label(frame, text="账号").pack(anchor="w")
-        ttk.Entry(frame, textvariable=username).pack(fill="x", pady=(3, 10))
-        ttk.Label(frame, text="密码（至少 6 位）").pack(anchor="w")
-        ttk.Entry(frame, textvariable=password, show="•").pack(fill="x", pady=(3, 10))
-        ttk.Label(frame, text="角色").pack(anchor="w")
-        ttk.Combobox(frame, textvariable=role, values=["user", "admin"], state="readonly").pack(fill="x", pady=(3, 10))
-        ttk.Checkbutton(frame, text="启用账号", variable=active).pack(anchor="w", pady=(0, 12))
-
-        def save() -> None:
-            try:
-                self.auth.upsert_account(username.get(), password.get(), role=role.get(), active=active.get())
-            except Exception as exc:
-                messagebox.showerror(APP_NAME, str(exc))
-                return
-            on_saved()
-            win.destroy()
-
-        ttk.Button(frame, text="保存", command=save).pack(fill="x")
-        self.center_window(win)
 
     def run(self) -> None:
         self.root.mainloop()
