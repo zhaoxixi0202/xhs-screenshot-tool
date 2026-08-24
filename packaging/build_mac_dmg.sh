@@ -6,6 +6,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 NODE_BIN="${NODE_BIN:-$(command -v node || true)}"
 DMG_PATH="${DMG_PATH:-$PROJECT_DIR/../小红书笔记截图工具_Mac可分发安装包.dmg}"
 AUTH_API_URL="${AUTH_API_URL:-}"
+TARGET_ARCH="${TARGET_ARCH:-$(uname -m)}"
 
 if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
   echo "找不到可用的 node。请先安装 Node.js 22+，或设置 NODE_BIN=/path/to/node"
@@ -21,6 +22,7 @@ printf '{"authApiUrl":"%s"}\n' "$AUTH_API_URL" > "$AUTH_CONFIG_DIR/auth_config.j
   --clean \
   --noconfirm \
   --windowed \
+  --target-architecture "$TARGET_ARCH" \
   --name "小红书笔记截图工具" \
   --osx-bundle-identifier "local.xhs-screenshot-tool" \
   --icon assets/app_icon.icns \
