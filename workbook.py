@@ -148,10 +148,12 @@ def is_blankish(image_path: Path) -> bool:
 def run_worker(items: list[dict[str, Any]], opts: BatchOptions) -> Path:
     result_path = opts.run_dir / "worker_results.json"
     job_path = opts.run_dir / "worker_job.json"
+    status_path = opts.run_dir / "worker_status.json"
     screenshot_dir = opts.run_dir / "screenshots"
     job = {
         "items": items,
         "outputDir": str(screenshot_dir),
+        "statusPath": str(status_path),
         "timeoutMs": opts.timeout_ms,
         "delayMs": opts.min_delay_ms,
         "minDelayMs": opts.min_delay_ms,
@@ -165,11 +167,21 @@ def run_worker(items: list[dict[str, Any]], opts: BatchOptions) -> Path:
         },
     }
     job_path.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
-    completed = subprocess.run(
-        [resolve_node(), str(WORKER), "--job", str(job_path), "--out", str(result_path)],
-        text=True,
-        capture_output=True,
-    )
+    total_timeout = max(120, int(len(items) * (opts.timeout_ms / 1000 + opts.max_retries * opts.max_delay_ms / 1000 + 10)))
+    try:
+        completed = subprocess.run(
+            [resolve_node(), str(WORKER), "--job", str(job_path), "--out", str(result_path)],
+            text=True,
+            capture_output=True,
+            timeout=total_timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        error_text = f"截图进程超过 {total_timeout} 秒仍未完成，已自动停止。"
+        partial = "\n".join(part for part in [exc.stderr, exc.stdout] if part)
+        if partial:
+            error_text += "\n" + partial
+        (opts.run_dir / "worker_error.txt").write_text(error_text, encoding="utf-8")
+        raise RuntimeError(error_text)
     if completed.returncode != 0:
         error_text = "\n".join(part for part in [completed.stderr.strip(), completed.stdout.strip()] if part)
         (opts.run_dir / "worker_error.txt").write_text(error_text or f"worker exited {completed.returncode}", encoding="utf-8")

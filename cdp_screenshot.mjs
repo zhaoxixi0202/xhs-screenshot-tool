@@ -28,6 +28,15 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function writeStatus(job, patch) {
+  if (!job.statusPath) return;
+  const payload = {
+    time: new Date().toISOString(),
+    ...patch,
+  };
+  await fs.writeFile(job.statusPath, JSON.stringify(payload, null, 2)).catch(() => {});
+}
+
 function httpJson(url, method = "GET") {
   return new Promise((resolve, reject) => {
     const req = http.request(url, { method }, (res) => {
@@ -285,6 +294,7 @@ async function capture(cdp, file) {
 }
 
 async function shootOne(cdp, item, job, attempt) {
+  await writeStatus(job, { stage: "row", message: `正在处理第 ${item.row} 行，第 ${attempt} 次尝试`, row: item.row, attempt });
   const name = `row_${String(item.row || item.index).padStart(4, "0")}_${attempt}`;
   const successFile = path.join(job.outputDir, `${name}.png`);
   const failFile = path.join(job.outputDir, `${name}_failure.png`);
@@ -314,11 +324,13 @@ async function main() {
   const job = JSON.parse(await fs.readFile(jobPath, "utf8"));
   await fs.mkdir(job.outputDir, { recursive: true });
   const port = 9222 + Math.floor(Math.random() * 1000);
+  await writeStatus(job, { stage: "chrome", message: "正在启动 Chrome 截图环境" });
   const chrome = await launchChrome(port, job.viewport);
   const results = [];
   let delay = job.delayMs || 3500;
   let consecutive = 0;
   try {
+    await writeStatus(job, { stage: "browser", message: "Chrome 已启动，正在打开截图页面" });
     const cdp = await newPage(port);
     for (const item of job.items) {
       let result = null;
@@ -332,6 +344,7 @@ async function main() {
         await sleep(delay * attempt);
       }
       results.push(result);
+      await writeStatus(job, { stage: "done-row", message: `第 ${item.row} 行处理完成：${result.status}`, row: item.row });
       if (result.status === "成功") {
         consecutive = 0;
         delay = Math.max(job.minDelayMs || 3000, Math.round(delay * 0.92));
@@ -342,10 +355,12 @@ async function main() {
       await fs.writeFile(outPath, JSON.stringify({ results, stopped: false }, null, 2));
       if (consecutive >= (job.maxConsecutiveFailures || 5)) {
         await fs.writeFile(outPath, JSON.stringify({ results, stopped: true, reason: "连续失败/被拦达到阈值，已中止" }, null, 2));
+        await writeStatus(job, { stage: "stopped", message: "连续失败/被拦达到阈值，已中止" });
         break;
       }
       await sleep(delay + Math.floor(Math.random() * 1200));
     }
+    await writeStatus(job, { stage: "complete", message: "截图完成，正在写回 Excel" });
     cdp.close();
   } finally {
     chrome.child.kill();

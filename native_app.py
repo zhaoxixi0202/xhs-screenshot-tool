@@ -99,6 +99,7 @@ class ScreenshotApp:
         self.progress = StringVar(value="等待开始")
         self.output_path: Path | None = None
         self.columns_by_sheet: dict[str, list[dict]] = {}
+        self.batch_started_at = 0.0
 
         self.build_ui()
         self.root.after(500, self.refresh_today_logs)
@@ -260,6 +261,7 @@ class ScreenshotApp:
             return
 
         self.current_run_dir = run_dir
+        self.batch_started_at = time.time()
         self.output_path = None
         self.open_output_button.config(state="disabled")
         self.start_button.config(state="disabled")
@@ -306,10 +308,12 @@ class ScreenshotApp:
             return
         result_path = self.current_run_dir / "worker_results.json"
         job_path = self.current_run_dir / "worker_job.json"
+        status_path = self.current_run_dir / "worker_status.json"
         results = []
         total = 0
         stopped = False
         reason = ""
+        live_message = ""
         if job_path.exists():
             try:
                 total = len(json.loads(job_path.read_text(encoding="utf-8")).get("items", []))
@@ -323,12 +327,20 @@ class ScreenshotApp:
                 reason = data.get("reason", "")
             except Exception:
                 pass
+        if status_path.exists():
+            try:
+                live_message = json.loads(status_path.read_text(encoding="utf-8")).get("message", "")
+            except Exception:
+                live_message = ""
         success = sum(1 for item in results if item.get("status") == "成功")
         failed = len(results) - success
         percent = round(len(results) / total * 100) if total else 0
         self.progress_bar["value"] = percent
         stop_text = f"；已中止：{reason}" if stopped else ""
-        self.progress.set(f"{len(results)}/{total or '?'}，成功 {success}，失败 {failed}{stop_text}")
+        prefix = f"{live_message}；" if live_message else ""
+        if not results and self.batch_started_at and time.time() - self.batch_started_at > 90:
+            prefix = (prefix or "第一行仍在等待页面加载/浏览器响应；")
+        self.progress.set(f"{prefix}{len(results)}/{total or '?'}，成功 {success}，失败 {failed}{stop_text}")
 
     def update_progress_from_result(self, result: dict) -> None:
         results = result.get("results", [])
