@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>小红书笔记截图工具</title>
+  <style>
+    :root { color-scheme: light; --ink:#1f2937; --muted:#6b7280; --line:#d8dee8; --brand:#e5485d; --bg:#f6f7fb; --ok:#0f766e; --bad:#b42318; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); }
+    main { max-width: 1040px; margin: 0 auto; padding: 28px 18px 48px; }
+    h1 { font-size: 24px; margin: 0 0 18px; }
+    .tabs { display:flex; gap:8px; margin-bottom:16px; }
+    .tab { border:1px solid var(--line); background:white; padding:9px 14px; border-radius:8px; cursor:pointer; }
+    .tab.active { color:white; border-color:var(--brand); background:var(--brand); }
+    section { background:white; border:1px solid var(--line); border-radius:8px; padding:18px; }
+    .hidden { display:none; }
+    label { display:block; font-size:13px; color:var(--muted); margin:12px 0 6px; }
+    input[type=text], input[type=number], input[type=file], select { width:100%; border:1px solid var(--line); border-radius:6px; padding:10px; font-size:14px; background:white; }
+    .dropzone { border:1.5px dashed #b9c3d3; border-radius:8px; background:#fbfcff; padding:20px; text-align:center; transition:.15s border-color,.15s background; }
+    .dropzone.dragover { border-color:var(--brand); background:#fff4f6; }
+    .dropzone input { display:none; }
+    .drop-title { font-size:15px; color:var(--ink); }
+    .file-name { margin-top:8px; color:var(--muted); font-size:13px; }
+    .grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px; }
+    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    button.run { margin-top:16px; border:0; background:var(--brand); color:white; border-radius:8px; padding:11px 18px; font-size:15px; cursor:pointer; }
+    button.run:disabled { opacity:.55; cursor:wait; }
+    .note { margin-top:12px; color:var(--muted); font-size:13px; line-height:1.6; }
+    .result { margin-top:16px; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fbfcff; min-height:48px; white-space:pre-wrap; }
+    .progress { margin-top:10px; height:10px; background:#e8edf5; border-radius:999px; overflow:hidden; }
+    .bar { width:0%; height:100%; background:var(--brand); transition:width .25s ease; }
+    .mini-table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
+    .mini-table td { border-top:1px solid var(--line); padding:7px 4px; vertical-align:top; }
+    .ok { color:var(--ok); }
+    .bad { color:var(--bad); }
+    img.preview { margin-top:12px; max-width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
+    a.download { display:inline-block; margin-top:10px; color:var(--brand); text-decoration:none; font-weight:600; }
+    @media (max-width: 760px) { .grid, .grid-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>小红书笔记截图工具</h1>
+    <div class="tabs">
+      <button class="tab active" data-tab="single">单条链接</button>
+      <button class="tab" data-tab="batch">Excel 批量</button>
+    </div>
+
+    <section id="single">
+      <form id="singleForm">
+        <label>笔记链接</label>
+        <input name="url" type="text" placeholder="https://www.xiaohongshu.com/..." required>
+        <div class="grid-2">
+          <div>
+            <label>页面等待时间（毫秒）</label>
+            <input name="timeoutMs" type="number" value="25000" min="8000" max="90000">
+          </div>
+        </div>
+        <button class="run" type="submit">开始截图</button>
+      </form>
+      <div class="note">截图为当前浏览器视口；工具会尝试关闭登录弹窗和遮罩，但不会登录或处理验证码。</div>
+      <div id="singleResult" class="result">等待开始。</div>
+    </section>
+
+    <section id="batch" class="hidden">
+      <form id="batchForm">
+        <label>Excel 文件</label>
+        <div id="dropzone" class="dropzone">
+          <input id="batchFile" name="file" type="file" accept=".xlsx" required>
+          <div class="drop-title">把 Excel 拖到这里，或点击选择文件</div>
+          <div id="fileName" class="file-name">尚未选择文件</div>
+        </div>
+        <div class="grid">
+          <div><label>工作表</label><select id="sheetName" name="sheetName"><option>Sheet1</option></select></div>
+          <div><label>链接列</label><select id="linkCol" name="linkCol"><option>A</option></select></div>
+          <div><label>输出列</label><select id="outputCol" name="outputCol"><option>B</option></select></div>
+          <div><label>起始行</label><input name="startRow" type="number" value="2" min="1"></div>
+        </div>
+        <div class="grid">
+          <div><label>结束行（可空）</label><input name="endRow" type="number" min="1"></div>
+          <div><label>单页超时</label><input name="timeoutMs" type="number" value="25000" min="8000"></div>
+          <div><label>基础间隔</label><input name="minDelayMs" type="number" value="3500" min="1000"></div>
+          <div><label>连续失败中止</label><input name="maxConsecutiveFailures" type="number" value="5" min="1"></div>
+        </div>
+        <div class="grid-2">
+          <div><label>最大退避间隔</label><input name="maxDelayMs" type="number" value="60000" min="5000"></div>
+          <div><label>重试次数</label><input name="maxRetries" type="number" value="2" min="1" max="5"></div>
+        </div>
+        <label><input name="resume" type="checkbox" checked> 跳过已标记成功的行</label>
+        <button class="run" type="submit">开始批量截图</button>
+      </form>
+      <div class="note">批量运行会比较久。100 行以上建议保留默认限速；命中验证/风控会自动拉长等待，连续失败会中止。</div>
+      <div id="batchResult" class="result">等待开始。</div>
+    </section>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll(".tab");
+    tabs.forEach(tab => tab.addEventListener("click", () => {
+      tabs.forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      document.querySelectorAll("section").forEach(s => s.classList.add("hidden"));
+      document.getElementById(tab.dataset.tab).classList.remove("hidden");
+    }));
+
+    async function postForm(url, form, resultEl, button) {
+      button.disabled = true;
+      resultEl.textContent = "正在处理，请稍等...";
+      try {
+        const body = form.enctype === "multipart/form-data" ? new FormData(form) : new URLSearchParams(new FormData(form));
+        const res = await fetch(url, { method: "POST", body });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || data.reason || "处理失败");
+        return data;
+      } catch (err) {
+        resultEl.innerHTML = `<span class="bad">${err.message}</span>`;
+        return null;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    const batchFile = document.getElementById("batchFile");
+    const dropzone = document.getElementById("dropzone");
+    const fileName = document.getElementById("fileName");
+    const workbookMeta = { sheets: [] };
+
+    function setOptions(select, options, selected) {
+      select.innerHTML = "";
+      for (const item of options) {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        option.selected = item.value === selected;
+        select.appendChild(option);
+      }
+    }
+
+    function refreshColumnSelects(sheetName, recommended = {}) {
+      const sheet = workbookMeta.sheets.find(s => s.name === sheetName) || workbookMeta.sheets[0];
+      if (!sheet) return;
+      const options = sheet.columns.map(c => ({ value: c.letter, label: c.label }));
+      setOptions(document.getElementById("linkCol"), options, recommended.linkCol || options[0]?.value || "A");
+      setOptions(document.getElementById("outputCol"), options, recommended.outputCol || options[1]?.value || options[0]?.value || "B");
+    }
+
+    async function loadWorkbookInfo(file) {
+      if (!file) return;
+      fileName.textContent = file.name;
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        const res = await fetch("/api/workbook-info", { method: "POST", body: formData });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || "读取工作表失败");
+        workbookMeta.sheets = data.sheets || [];
+        const sheetOptions = workbookMeta.sheets.map(s => ({ value: s.name, label: s.name }));
+        setOptions(document.getElementById("sheetName"), sheetOptions, data.recommended?.sheetName);
+        refreshColumnSelects(data.recommended?.sheetName, data.recommended || {});
+        document.getElementById("batchResult").innerHTML = `<span class="ok">已读取文件，可选择工作表和列。</span>`;
+      } catch (err) {
+        document.getElementById("batchResult").innerHTML = `<span class="bad">${err.message}</span>`;
+      }
+    }
+
+    dropzone.addEventListener("click", () => batchFile.click());
+    dropzone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("dragover");
+      const file = event.dataTransfer.files[0];
+      if (!file) return;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      batchFile.files = transfer.files;
+      loadWorkbookInfo(file);
+    });
+    batchFile.addEventListener("change", () => loadWorkbookInfo(batchFile.files[0]));
+    document.getElementById("sheetName").addEventListener("change", (event) => refreshColumnSelects(event.target.value));
+
+    document.getElementById("singleForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const el = document.getElementById("singleResult");
+      const data = await postForm("/api/single", form, el, form.querySelector("button"));
+      if (!data) return;
+      const klass = data.ok ? "ok" : "bad";
+      el.innerHTML = `<span class="${klass}">${data.status || "完成"} ${data.reason || ""}</span>`;
+      if (data.image) {
+        el.innerHTML += `<a class="download" href="${data.download}">下载图片</a><img class="preview" src="${data.image}" alt="截图预览">`;
+      }
+    });
+
+    document.getElementById("batchForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      form.enctype = "multipart/form-data";
+      const el = document.getElementById("batchResult");
+      const data = await postForm("/api/batch", form, el, form.querySelector("button"));
+      if (!data) return;
+      pollBatchJob(data.jobId, el, form.querySelector("button"));
+    });
+
+    async function pollBatchJob(jobId, el, button) {
+      let timer = null;
+      const render = (data) => {
+        const percent = data.total ? Math.round(data.done / data.total * 100) : 0;
+        const rows = (data.results || []).map(r => `<tr><td>第 ${r.row || ""} 行</td><td>${r.status || ""}</td><td>${r.reason || ""}</td></tr>`).join("");
+        const statusText = data.status === "done" ? "完成" : data.status === "error" ? "出错" : "截图中";
+        const stopped = data.stopped ? `<div class="bad">已中止：${data.reason || ""}</div>` : "";
+        const download = data.workbook ? `<a class="download" href="${data.workbook}">下载写回图片的 Excel</a>` : "";
+        el.innerHTML = `<span class="${data.status === "error" ? "bad" : "ok"}">${statusText}：${data.done}/${data.total || "?"}，成功 ${data.success}，失败 ${data.failed}</span>
+          <div class="progress"><div class="bar" style="width:${percent}%"></div></div>
+          ${stopped}${download}
+          ${rows ? `<table class="mini-table">${rows}</table>` : ""}`;
+      };
+      const tick = async () => {
+        try {
+          const res = await fetch(`/api/job/${jobId}`);
+          const data = await res.json();
+          if (!res.ok || data.ok === false) throw new Error(data.error || "读取进度失败");
+          render(data);
+          if (data.status === "done" || data.status === "error") {
+            clearInterval(timer);
+            button.disabled = false;
+          }
+        } catch (err) {
+          clearInterval(timer);
+          button.disabled = false;
+          el.innerHTML = `<span class="bad">${err.message}</span>`;
+        }
+      };
+      button.disabled = true;
+      await tick();
+      timer = setInterval(tick, 1000);
+    }
+  </script>
+</body>
+</html>

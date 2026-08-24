@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: xhs-screenshot-tool
+    env: docker
+    plan: starter
+    autoDeploy: false
+    healthCheckPath: /
+    disk:
+      name: xhs-runs
+      mountPath: /app/runs
+      sizeGB: 5
