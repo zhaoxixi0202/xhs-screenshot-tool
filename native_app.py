@@ -464,6 +464,7 @@ class ScreenshotApp:
         stopped = False
         reason = ""
         live_message = ""
+        status_data = {}
         if job_path.exists():
             try:
                 total = len(json.loads(job_path.read_text(encoding="utf-8")).get("items", []))
@@ -479,7 +480,8 @@ class ScreenshotApp:
                 pass
         if status_path.exists():
             try:
-                live_message = json.loads(status_path.read_text(encoding="utf-8")).get("message", "")
+                status_data = json.loads(status_path.read_text(encoding="utf-8"))
+                live_message = status_data.get("message", "")
             except Exception:
                 live_message = ""
         success = sum(1 for item in results if item.get("status") == "成功")
@@ -488,10 +490,23 @@ class ScreenshotApp:
         percent = round(len(results) / total * 100) if total else 0
         self.progress_bar["value"] = percent
         stop_text = f"；已中止：{reason}" if stopped else ""
-        prefix = f"{live_message}；" if live_message else ""
+        prefix = self.live_progress_text(live_message, status_data)
         if not results and self.batch_started_at and time.time() - self.batch_started_at > 90:
             prefix = (prefix or "第一行仍在等待页面加载/浏览器响应；")
         self.progress.set(f"{prefix}{len(results)}/{total or '?'}，成功 {success}，失败 {failed}{stop_text}")
+
+    def live_progress_text(self, live_message: str, status_data: dict) -> str:
+        if not live_message:
+            return ""
+        started_at = status_data.get("startedAt")
+        timeout_ms = int(status_data.get("timeoutMs") or 0)
+        if not started_at or not timeout_ms:
+            return f"{live_message}；"
+        elapsed = max(0, int((time.time() * 1000 - int(started_at)) / 1000))
+        timeout_sec = max(1, int(timeout_ms / 1000))
+        if elapsed <= timeout_sec:
+            return f"{live_message}，已等待 {elapsed}s / 最多 {timeout_sec}s；"
+        return f"{live_message}，已超过预计等待 {elapsed}s / {timeout_sec}s，疑似卡住，可点“终止当前任务”；"
 
     def render_recent_failures(self, results: list[dict]) -> None:
         if not hasattr(self, "recent_failures"):

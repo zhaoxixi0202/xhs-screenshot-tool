@@ -338,7 +338,14 @@ async function capture(cdp, file) {
 }
 
 async function shootOne(cdp, item, job, attempt) {
-  await writeStatus(job, { stage: "row", message: `正在处理第 ${item.row} 行，第 ${attempt} 次尝试`, row: item.row, attempt });
+  await writeStatus(job, {
+    stage: "row",
+    message: `正在处理第 ${item.row} 行，第 ${attempt} 次尝试`,
+    row: item.row,
+    attempt,
+    startedAt: Date.now(),
+    timeoutMs: job.timeoutMs,
+  });
   const name = `row_${String(item.row || item.index).padStart(4, "0")}_${attempt}`;
   const successFile = path.join(job.outputDir, `${name}.png`);
   const failFile = path.join(job.outputDir, `${name}_failure.png`);

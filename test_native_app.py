@@ -1,7 +1,8 @@
 from pathlib import Path
+from unittest.mock import patch
 import unittest
 
-from native_app import make_batch_options, request_cancel
+from native_app import ScreenshotApp, make_batch_options, request_cancel
 
 
 class NativeAppOptionsTest(unittest.TestCase):
@@ -51,6 +52,17 @@ class NativeAppOptionsTest(unittest.TestCase):
             self.assertEqual(cancel_path, run_dir / "cancel_requested")
             self.assertTrue(cancel_path.exists())
             self.assertIn("用户手动终止", cancel_path.read_text(encoding="utf-8"))
+
+    def test_live_progress_text_reports_elapsed_wait(self):
+        with patch("native_app.time.time", return_value=130.0):
+            text = ScreenshotApp.live_progress_text(
+                None,
+                "正在处理第 5 行，第 1 次尝试",
+                {"startedAt": 100000, "timeoutMs": 25000},
+            )
+
+        self.assertIn("已超过预计等待 30s / 25s", text)
+        self.assertIn("可点“终止当前任务”", text)
 
 
 if __name__ == "__main__":
