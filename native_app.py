@@ -123,7 +123,7 @@ class ScreenshotApp:
             return
         win = Toplevel(self.root)
         win.title("登录")
-        win.geometry("360x240")
+        win.geometry("380x280")
         win.resizable(False, False)
         win.protocol("WM_DELETE_WINDOW", self.root.destroy)
         win.grab_set()
@@ -157,7 +157,7 @@ class ScreenshotApp:
     def show_first_admin_setup(self) -> None:
         win = Toplevel(self.root)
         win.title("首次创建管理员")
-        win.geometry("390x270")
+        win.geometry("430x380")
         win.resizable(False, False)
         win.protocol("WM_DELETE_WINDOW", self.root.destroy)
         win.grab_set()
@@ -586,7 +586,7 @@ class ScreenshotApp:
     def open_account_editor(self, on_saved) -> None:
         win = Toplevel(self.root)
         win.title("新增/重置账号")
-        win.geometry("360x300")
+        win.geometry("390x360")
         frame = ttk.Frame(win, padding=18)
         frame.pack(fill="both", expand=True)
         username = StringVar()
