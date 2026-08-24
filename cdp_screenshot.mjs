@@ -37,6 +37,16 @@ async function writeStatus(job, patch) {
   await fs.writeFile(job.statusPath, JSON.stringify(payload, null, 2)).catch(() => {});
 }
 
+async function cancelRequested(job) {
+  if (!job.cancelPath) return false;
+  try {
+    await fs.access(job.cancelPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function httpJson(url, method = "GET") {
   return new Promise((resolve, reject) => {
     const req = http.request(url, { method }, (res) => {
@@ -333,6 +343,11 @@ async function main() {
     await writeStatus(job, { stage: "browser", message: "Chrome 已启动，正在打开截图页面" });
     const cdp = await newPage(port);
     for (const item of job.items) {
+      if (await cancelRequested(job)) {
+        await fs.writeFile(outPath, JSON.stringify({ results, stopped: true, reason: "用户手动终止截图任务" }, null, 2));
+        await writeStatus(job, { stage: "cancelled", message: "用户手动终止截图任务" });
+        break;
+      }
       let result = null;
       for (let attempt = 1; attempt <= (job.maxRetries || 1); attempt++) {
         result = await shootOne(cdp, item, job, attempt).catch(async (err) => {

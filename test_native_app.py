@@ -1,7 +1,7 @@
 from pathlib import Path
 import unittest
 
-from native_app import make_batch_options
+from native_app import make_batch_options, request_cancel
 
 
 class NativeAppOptionsTest(unittest.TestCase):
@@ -37,6 +37,18 @@ class NativeAppOptionsTest(unittest.TestCase):
         self.assertEqual(opts.max_delay_ms, 65000)
         self.assertEqual(opts.max_retries, 3)
         self.assertEqual(opts.max_consecutive_failures, 6)
+
+    def test_request_cancel_writes_cancel_flag(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+
+            cancel_path = request_cancel(run_dir)
+
+            self.assertEqual(cancel_path, run_dir / "cancel_requested")
+            self.assertTrue(cancel_path.exists())
+            self.assertIn("用户手动终止", cancel_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -149,11 +149,13 @@ def run_worker(items: list[dict[str, Any]], opts: BatchOptions) -> Path:
     result_path = opts.run_dir / "worker_results.json"
     job_path = opts.run_dir / "worker_job.json"
     status_path = opts.run_dir / "worker_status.json"
+    cancel_path = opts.run_dir / "cancel_requested"
     screenshot_dir = opts.run_dir / "screenshots"
     job = {
         "items": items,
         "outputDir": str(screenshot_dir),
         "statusPath": str(status_path),
+        "cancelPath": str(cancel_path),
         "timeoutMs": opts.timeout_ms,
         "delayMs": opts.min_delay_ms,
         "minDelayMs": opts.min_delay_ms,

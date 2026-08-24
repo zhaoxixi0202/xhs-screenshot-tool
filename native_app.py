@@ -11,7 +11,7 @@ import threading
 import time
 import traceback
 from pathlib import Path
-from tkinter import BooleanVar, StringVar, Tk, Toplevel, filedialog, messagebox, ttk
+from tkinter import BooleanVar, Menu, StringVar, Tk, Toplevel, filedialog, messagebox, ttk
 
 from openpyxl import load_workbook
 
@@ -48,6 +48,12 @@ def new_native_run_dir() -> Path:
     path = app_data_dir() / "runs" / f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def request_cancel(run_dir: Path) -> Path:
+    cancel_path = run_dir / "cancel_requested"
+    cancel_path.write_text("用户手动终止截图任务", encoding="utf-8")
+    return cancel_path
 
 
 def account_store() -> AuthStore:
@@ -107,6 +113,7 @@ class ScreenshotApp:
         self.output_path: Path | None = None
         self.columns_by_sheet: dict[str, list[dict]] = {}
         self.batch_started_at = 0.0
+        self.is_running = False
 
         self.root.withdraw()
         self.show_login()
@@ -194,6 +201,7 @@ class ScreenshotApp:
 
     def open_main_window(self) -> None:
         self.root.deiconify()
+        self.build_menu()
         self.build_ui()
         self.root.after(300, self.bring_to_front)
         self.root.after(500, self.refresh_today_logs)
@@ -208,6 +216,25 @@ class ScreenshotApp:
         win.lift()
         win.focus_force()
 
+    def build_menu(self) -> None:
+        menu = Menu(self.root)
+        account_menu = Menu(menu, tearoff=False)
+        if self.current_user and self.current_user.get("role") == "admin":
+            account_menu.add_command(label="账号管理中心", command=self.open_account_center)
+        account_menu.add_command(label="退出登录", command=self.logout)
+        menu.add_cascade(label="账号", menu=account_menu)
+        self.root.config(menu=menu)
+
+    def logout(self) -> None:
+        if self.is_running:
+            messagebox.showwarning(APP_NAME, "截图任务运行中，请先终止或等待完成。")
+            return
+        for child in self.root.winfo_children():
+            child.destroy()
+        self.current_user = None
+        self.root.withdraw()
+        self.show_login()
+
     def build_ui(self) -> None:
         outer = ttk.Frame(self.root, padding=18)
         outer.pack(fill="both", expand=True)
@@ -220,14 +247,8 @@ class ScreenshotApp:
             foreground="#667085",
         )
         note.pack(anchor="w", pady=(4, 14))
-        user_text = f"当前账号：{self.current_user.get('username', '') if self.current_user else ''}"
-        if self.current_user and self.current_user.get("role") == "admin":
-            user_row = ttk.Frame(outer)
-            user_row.pack(fill="x", pady=(0, 12))
-            ttk.Label(user_row, text=user_text, foreground="#667085").pack(side="left")
-            ttk.Button(user_row, text="账号管理中心", command=self.open_account_center).pack(side="right")
-        else:
-            ttk.Label(outer, text=user_text, foreground="#667085").pack(anchor="w", pady=(0, 12))
+        user_text = f"当前账号：{self.current_user.get('username', '') if self.current_user else ''}（账号管理在顶部菜单「账号」里）"
+        ttk.Label(outer, text=user_text, foreground="#667085").pack(anchor="w", pady=(0, 12))
 
         file_box = ttk.LabelFrame(outer, text="Excel 文件")
         file_box.pack(fill="x", pady=(0, 12))
@@ -262,6 +283,8 @@ class ScreenshotApp:
         actions.pack(fill="x", pady=(0, 12))
         self.start_button = ttk.Button(actions, text="开始批量截图", command=self.start_batch)
         self.start_button.pack(side="left")
+        self.cancel_button = ttk.Button(actions, text="终止当前任务", command=self.cancel_batch, state="disabled")
+        self.cancel_button.pack(side="left", padx=(10, 0))
         self.open_output_button = ttk.Button(actions, text="打开结果位置", command=self.open_output, state="disabled")
         self.open_output_button.pack(side="left", padx=(10, 0))
 
@@ -377,6 +400,8 @@ class ScreenshotApp:
         self.output_path = None
         self.open_output_button.config(state="disabled")
         self.start_button.config(state="disabled")
+        self.cancel_button.config(state="normal")
+        self.is_running = True
         self.progress_bar["value"] = 0
         self.status.set("正在截图，请保持网络稳定，不要频繁手动操作浏览器。")
         self.progress.set("准备中...")
@@ -402,6 +427,8 @@ class ScreenshotApp:
             return
 
         self.start_button.config(state="normal")
+        self.cancel_button.config(state="disabled")
+        self.is_running = False
         if event == "done":
             result = payload if isinstance(payload, dict) else {}
             workbook = result.get("workbook")
@@ -414,6 +441,13 @@ class ScreenshotApp:
         else:
             self.status.set(f"出错：{payload}")
             self.refresh_today_logs()
+
+    def cancel_batch(self) -> None:
+        if not self.current_run_dir or not self.is_running:
+            return
+        request_cancel(self.current_run_dir)
+        self.status.set("正在终止：会在当前页面处理结束后停止，并保留已完成结果。")
+        self.cancel_button.config(state="disabled")
 
     def update_progress_from_files(self) -> None:
         if not self.current_run_dir:
