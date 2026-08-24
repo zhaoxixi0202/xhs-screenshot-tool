@@ -5,3 +5,5 @@ __pycache__/
 build/
 dist/
 /*.spec
+.venv-x86/
+.node-x64/
