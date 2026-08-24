@@ -1,10 +1,11 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from openpyxl import Workbook
 
-from app import content_disposition, has_uploaded_file, server_address, workbook_info_payload
+from app import ROOT, content_disposition, has_uploaded_file, screenshot_logs_payload, server_address, workbook_info_payload
 from workbook import resolve_node
 
 
@@ -57,6 +58,25 @@ class AppHelperTests(unittest.TestCase):
 
     def test_resolve_node_prefers_environment_path(self):
         self.assertEqual(resolve_node({"NODE_PATH": "/usr/bin/node"}), "/usr/bin/node")
+
+    def test_screenshot_logs_payload_lists_only_today(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            root = Path(tmp)
+            today = root / "20260824-101010"
+            old = root / "20260823-101010"
+            today.mkdir()
+            old.mkdir()
+            (today / "worker_results.json").write_text('{"results":[{"status":"成功"},{"status":"失败"}]}', encoding="utf-8")
+            (today / "output_截图结果.xlsx").write_text("fake", encoding="utf-8")
+            (old / "worker_results.json").write_text('{"results":[{"status":"成功"}]}', encoding="utf-8")
+
+            payload = screenshot_logs_payload(root, now_struct=time.strptime("2026-08-24", "%Y-%m-%d"))
+
+        self.assertEqual(len(payload["logs"]), 1)
+        self.assertEqual(payload["logs"][0]["runId"], "20260824-101010")
+        self.assertEqual(payload["logs"][0]["success"], 1)
+        self.assertEqual(payload["logs"][0]["failed"], 1)
+        self.assertTrue(payload["logs"][0]["workbook"].endswith("output_%E6%88%AA%E5%9B%BE%E7%BB%93%E6%9E%9C.xlsx"))
 
 
 if __name__ == "__main__":

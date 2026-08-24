@@ -35,7 +35,16 @@
     .ok { color:var(--ok); }
     .bad { color:var(--bad); }
     img.preview { margin-top:12px; max-width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
-    a.download { display:inline-block; margin-top:10px; color:var(--brand); text-decoration:none; font-weight:600; }
+    a.download { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; background:var(--brand); color:white; text-decoration:none; font-weight:700; border-radius:8px; padding:10px 14px; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+    a.download:hover { filter:brightness(.96); }
+    .log-head { display:flex; justify-content:space-between; align-items:center; margin-top:18px; gap:12px; }
+    .log-head h2 { font-size:17px; margin:0; }
+    .ghost { border:1px solid var(--line); background:white; color:var(--ink); border-radius:8px; padding:8px 10px; cursor:pointer; }
+    .logs { margin-top:10px; background:white; border:1px solid var(--line); border-radius:8px; padding:12px; }
+    .log-item { display:grid; grid-template-columns: 92px 1fr auto; gap:10px; align-items:center; padding:9px 0; border-top:1px solid var(--line); }
+    .log-item:first-child { border-top:0; }
+    .log-time { color:var(--muted); font-size:13px; }
+    .log-main { font-size:13px; line-height:1.5; }
     @media (max-width: 760px) { .grid, .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -93,6 +102,12 @@
       <div class="note">批量运行会比较久。100 行以上建议保留默认限速；命中验证/风控会自动拉长等待，连续失败会中止。</div>
       <div id="batchResult" class="result">等待开始。</div>
     </section>
+
+    <div class="log-head">
+      <h2>今日截图日志</h2>
+      <button id="refreshLogs" class="ghost" type="button">刷新</button>
+    </div>
+    <div id="todayLogs" class="logs">正在读取...</div>
   </main>
 
   <script>
@@ -194,6 +209,7 @@
       if (data.image) {
         el.innerHTML += `<a class="download" href="${data.download}">下载图片</a><img class="preview" src="${data.image}" alt="截图预览">`;
       }
+      loadTodayLogs();
     });
 
     document.getElementById("batchForm").addEventListener("submit", async (event) => {
@@ -228,6 +244,7 @@
           if (data.status === "done" || data.status === "error") {
             clearInterval(timer);
             button.disabled = false;
+            loadTodayLogs();
           }
         } catch (err) {
           clearInterval(timer);
@@ -239,6 +256,33 @@
       await tick();
       timer = setInterval(tick, 1000);
     }
+
+    async function loadTodayLogs() {
+      const el = document.getElementById("todayLogs");
+      try {
+        const res = await fetch("/api/logs/today");
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || "读取日志失败");
+        if (!data.logs.length) {
+          el.textContent = "今天还没有截图记录。";
+          return;
+        }
+        el.innerHTML = data.logs.map(item => {
+          const stopped = item.stopped ? `，已中止${item.reason ? "：" + item.reason : ""}` : "";
+          const file = item.workbook ? `<a class="download" href="${item.workbook}">下载 Excel</a>` : "";
+          return `<div class="log-item">
+            <div class="log-time">${item.time}</div>
+            <div class="log-main">任务 ${item.runId}<br>共 ${item.total} 行，成功 ${item.success}，失败 ${item.failed}${stopped}</div>
+            <div>${file}</div>
+          </div>`;
+        }).join("");
+      } catch (err) {
+        el.innerHTML = `<span class="bad">${err.message}</span>`;
+      }
+    }
+
+    document.getElementById("refreshLogs").addEventListener("click", loadTodayLogs);
+    loadTodayLogs();
   </script>
 </body>
 </html>

@@ -87,6 +87,37 @@ def public_path(path: str | Path) -> str:
         return str(p)
 
 
+def screenshot_logs_payload(runs_dir: Path = RUNS, now_struct=None) -> dict:
+    now_struct = now_struct or time.localtime()
+    today_prefix = time.strftime("%Y%m%d", now_struct)
+    logs = []
+    if not runs_dir.exists():
+        return {"ok": True, "date": time.strftime("%Y-%m-%d", now_struct), "logs": []}
+    for run_dir in sorted(runs_dir.iterdir(), reverse=True):
+        if not run_dir.is_dir() or not run_dir.name.startswith(today_prefix):
+            continue
+        results_path = run_dir / "worker_results.json"
+        result_data = {}
+        if results_path.exists():
+            try:
+                result_data = json.loads(results_path.read_text(encoding="utf-8"))
+            except Exception:
+                result_data = {}
+        results = result_data.get("results", [])
+        workbook = next(run_dir.glob("*_截图结果.xlsx"), None)
+        logs.append({
+            "runId": run_dir.name,
+            "time": f"{run_dir.name[9:11]}:{run_dir.name[11:13]}:{run_dir.name[13:15]}" if len(run_dir.name) >= 15 else run_dir.name,
+            "total": len(results),
+            "success": sum(1 for item in results if item.get("status") == "成功"),
+            "failed": sum(1 for item in results if item.get("status") and item.get("status") != "成功"),
+            "stopped": bool(result_data.get("stopped", False)),
+            "reason": result_data.get("reason", ""),
+            "workbook": public_path(workbook) if workbook else "",
+        })
+    return {"ok": True, "date": time.strftime("%Y-%m-%d", now_struct), "logs": logs}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         print("[%s] %s" % (self.log_date_time_string(), fmt % args))
@@ -112,6 +143,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.serve_file(target, download=True)
         if parsed.path.startswith("/api/job/"):
             return self.job_status(parsed.path.rsplit("/", 1)[-1])
+        if parsed.path == "/api/logs/today":
+            return self.send_json(screenshot_logs_payload())
         target = (STATIC / parsed.path.lstrip("/")).resolve()
         if STATIC in target.parents or target == STATIC:
             return self.serve_file(target)
