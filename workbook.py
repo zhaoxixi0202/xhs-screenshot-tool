@@ -66,6 +66,7 @@ class BatchOptions:
     max_consecutive_failures: int = 5
     viewport_width: int = 1280
     viewport_height: int = 900
+    use_system_chrome_profile: bool = True
 
 
 def column_number(value: str) -> int:
@@ -162,6 +163,7 @@ def run_worker(items: list[dict[str, Any]], opts: BatchOptions) -> Path:
         "maxDelayMs": opts.max_delay_ms,
         "maxRetries": opts.max_retries,
         "maxConsecutiveFailures": opts.max_consecutive_failures,
+        "useSystemChromeProfile": opts.use_system_chrome_profile,
         "viewport": {
             "width": opts.viewport_width,
             "height": opts.viewport_height,

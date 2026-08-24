@@ -76,6 +76,13 @@ async function resolveChrome() {
   throw new Error("Cannot find Chrome. Set CHROME_PATH or install Google Chrome/Chromium.");
 }
 
+function defaultChromeUserDataDir() {
+  if (process.env.CHROME_USER_DATA_DIR) return process.env.CHROME_USER_DATA_DIR;
+  if (process.platform === "darwin") return path.join(os.homedir(), "Library/Application Support/Google/Chrome");
+  if (process.platform === "win32") return path.join(process.env.LOCALAPPDATA || "", "Google/Chrome/User Data");
+  return path.join(os.homedir(), ".config/google-chrome");
+}
+
 class Cdp {
   constructor(wsUrl) {
     this.wsUrl = wsUrl;
@@ -119,13 +126,15 @@ class Cdp {
   }
 }
 
-async function launchChrome(port, viewport) {
+async function launchChrome(port, viewport, job = {}) {
   const chromePath = await resolveChrome();
-  const profile = await fs.mkdtemp(path.join(os.tmpdir(), "xhs-shot-"));
+  const useSystemProfile = job.useSystemChromeProfile !== false;
+  let profile = useSystemProfile ? defaultChromeUserDataDir() : await fs.mkdtemp(path.join(os.tmpdir(), "xhs-shot-"));
   const headless = process.env.HEADLESS !== "false";
   const args = [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profile}`,
+    "--profile-directory=Default",
     "--no-first-run",
     "--no-default-browser-check",
     "--disable-session-crashed-bubble",
@@ -135,7 +144,7 @@ async function launchChrome(port, viewport) {
     `--window-size=${viewport.width},${viewport.height}`,
     "about:blank",
   ];
-  if (headless) args.unshift("--headless=new");
+  if (headless && !useSystemProfile) args.unshift("--headless=new");
   const child = spawn(chromePath, args, { stdio: "ignore" });
   for (let i = 0; i < 80; i++) {
     try {
@@ -146,6 +155,9 @@ async function launchChrome(port, viewport) {
     }
   }
   child.kill();
+  if (useSystemProfile) {
+    throw new Error("复用本机 Chrome 环境失败。请先完全退出 Chrome 后重试；或取消勾选“复用本机 Chrome 环境”改用临时环境。");
+  }
   throw new Error("Chrome did not start. Please check Google Chrome is installed.");
 }
 
@@ -335,7 +347,7 @@ async function main() {
   await fs.mkdir(job.outputDir, { recursive: true });
   const port = 9222 + Math.floor(Math.random() * 1000);
   await writeStatus(job, { stage: "chrome", message: "正在启动 Chrome 截图环境" });
-  const chrome = await launchChrome(port, job.viewport);
+  const chrome = await launchChrome(port, job.viewport, job);
   const results = [];
   let delay = job.delayMs || 3500;
   let consecutive = 0;

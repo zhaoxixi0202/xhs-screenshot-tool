@@ -81,6 +81,7 @@ def make_batch_options(workbook_path: Path, run_dir: Path, values: dict) -> Batc
         max_delay_ms=int_value(values, "max_delay_ms", 60000),
         max_retries=int_value(values, "max_retries", 2),
         max_consecutive_failures=int_value(values, "max_consecutive_failures", 5),
+        use_system_chrome_profile=bool(values.get("use_system_chrome_profile", True)),
     )
 
 
@@ -108,6 +109,7 @@ class ScreenshotApp:
         self.max_retries = StringVar(value="2")
         self.max_consecutive_failures = StringVar(value="5")
         self.resume = BooleanVar(value=True)
+        self.use_system_chrome_profile = BooleanVar(value=True)
         self.status = StringVar(value="请选择 Excel 文件。")
         self.progress = StringVar(value="等待开始")
         self.output_path: Path | None = None
@@ -276,6 +278,7 @@ class ScreenshotApp:
         self.add_entry(grid, "重试次数", self.max_retries, 4, 0)
         self.add_entry(grid, "连续失败中止", self.max_consecutive_failures, 4, 1)
         ttk.Checkbutton(grid, text="跳过已标记成功的行", variable=self.resume).grid(row=5, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ttk.Checkbutton(grid, text="优先复用本机 Chrome 环境（降低风控；如失败请先关闭 Chrome 后重试）", variable=self.use_system_chrome_profile).grid(row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
         self.sheet_combo.bind("<<ComboboxSelected>>", lambda _event: self.refresh_columns())
 
@@ -382,6 +385,7 @@ class ScreenshotApp:
             "max_delay_ms": self.max_delay_ms.get(),
             "max_retries": self.max_retries.get(),
             "max_consecutive_failures": self.max_consecutive_failures.get(),
+            "use_system_chrome_profile": self.use_system_chrome_profile.get(),
         }
 
     def start_batch(self) -> None:

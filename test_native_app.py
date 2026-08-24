@@ -21,6 +21,7 @@ class NativeAppOptionsTest(unittest.TestCase):
                 "max_delay_ms": "65000",
                 "max_retries": "3",
                 "max_consecutive_failures": "6",
+                "use_system_chrome_profile": True,
             },
         )
 
@@ -37,6 +38,7 @@ class NativeAppOptionsTest(unittest.TestCase):
         self.assertEqual(opts.max_delay_ms, 65000)
         self.assertEqual(opts.max_retries, 3)
         self.assertEqual(opts.max_consecutive_failures, 6)
+        self.assertTrue(opts.use_system_chrome_profile)
 
     def test_request_cancel_writes_cancel_flag(self):
         import tempfile
