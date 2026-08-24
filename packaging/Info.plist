@@ -8,6 +8,8 @@
   <string>小红书笔记截图工具</string>
   <key>CFBundleExecutable</key>
   <string>launcher</string>
+  <key>CFBundleIconFile</key>
+  <string>app_icon</string>
   <key>CFBundleIdentifier</key>
   <string>local.xhs-screenshot-tool</string>
   <key>CFBundleInfoDictionaryVersion</key>
