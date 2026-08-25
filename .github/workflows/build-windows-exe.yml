@@ -1,0 +1,39 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Build EXE
+        shell: pwsh
+        run: .\packaging\build_windows_exe.ps1
+
+      - name: Package artifact
+        shell: pwsh
+        run: Compress-Archive -Path "dist\小红书笔记截图工具\*" -DestinationPath "小红书笔记截图工具_Windows版.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 小红书笔记截图工具_Windows版
+          path: 小红书笔记截图工具_Windows版.zip
