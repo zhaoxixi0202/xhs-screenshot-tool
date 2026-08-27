@@ -1,0 +1,53 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-windows-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build EXE
+        shell: pwsh
+        run: .\packaging\build_windows_exe.ps1
+
+      - name: Build installer
+        shell: pwsh
+        run: .\packaging\build_windows_installer.ps1
+
+      - name: Package portable artifact
+        shell: pwsh
+        run: Compress-Archive -Path "dist\小红书笔记截图工具\*" -DestinationPath "小红书笔记截图工具_Windows便携版.zip" -Force
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 小红书笔记截图工具_Windows安装包
+          path: dist\installer\小红书笔记截图工具_Windows安装包.exe
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 小红书笔记截图工具_Windows便携版
+          path: 小红书笔记截图工具_Windows便携版.zip
